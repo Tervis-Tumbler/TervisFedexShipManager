@@ -41,7 +41,8 @@ function Invoke-TervisFedExSMSHealthCheck {
 			Send-TervisMailMessage `
 				-To "technicalservices@tervis.com" `
 				-Subject "FSMS Heath Check: Could not connect to $Server" `
-				-Body "Could not connect to $Server"
+				-Body "Could not connect to $Server" `
+				-From "mailerdaemon@tervis.com"
 			return
 		}
 		$DownedServices = $FedexServices | Where-Object Status -ne "Running"
@@ -58,12 +59,26 @@ function Invoke-TervisFedExSMSHealthCheck {
 
 		Start-Sleep 120
 
-		$DownedServices | ForEach-Object {
+		$Restarted = $DownedServices | ForEach-Object {
 			if ($_.Status -ne "Running") {
 				Write-Warning "$Server - Attempt to start services has timed out. Restarting..."
 				Restart-Computer -ComputerName $Server -Force
-				return
+				return $true
 			}
 		}
+		
+		$DateString = Get-Date -Format o
+		$LogOutput = "$DateString "
+		if ($Restarted) {
+			$LogOutput += "$Server - Computer restarted"
+		} else {
+			$LogOutput += "$Server - Services restarted"
+		}
+		Send-TervisMailMessage `
+			-To "technicalservices@tervis.com" `
+			-Subject "FSMS Heath Check" `
+			-Body $LogOutput `
+			-From "mailerdaemon@tervis.com"
+		$LogOutput | Out-File -FilePath $PSScriptRoot\log.txt -Append
 	}
 }
